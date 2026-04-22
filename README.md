@@ -171,11 +171,58 @@ declared server/mod/plugin/datapack by its stable `ref`, fetches it with
 
 ## Supported v1 scope
 
-- Server software: Vanilla, Fabric, Paper
+- Server software: Vanilla, Fabric, Paper, NeoForge
 - Artifact sources: server lock entries, Modrinth, CurseForge file IDs, direct URLs
 - Runtime: NixOS systemd service
 - Managed directories: `mods/`, `plugins/`, `world/datapacks/`
 - Generated files: `eula.txt`, `server.properties`, `ops.json`, `whitelist.json`
 
-Forge, NeoForge, Quilt, Purpur, modpack manifests, and automatic latest-at-startup
+Forge, Quilt, Purpur, modpack manifests, and automatic latest-at-startup
 updates are intentionally left out of v1.
+
+## NeoForge
+
+NeoForge servers use the installer-based server layout. The locker pins the
+NeoForge installer jar, and the NixOS service runs the installer before startup
+when the matching `libraries/net/neoforged/neoforge/<version>/unix_args.txt`
+file is missing.
+
+Manifest example:
+
+```json
+{
+  "instances": {
+    "modded": {
+      "software": {
+        "type": "neoforge",
+        "minecraftVersion": "1.21.4",
+        "neoforge": {
+          "version": null
+        }
+      },
+      "mods": {
+        "modrinth": [
+          { "project": "jei", "version": null }
+        ]
+      }
+    }
+  }
+}
+```
+
+After running `minecraft-locker`, copy the resolved `neoforge.version` from the
+server artifact ref in the lock file into the NixOS module config:
+
+```nix
+services.minecraft-servers.modded = {
+  enable = true;
+  eula = true;
+  lockFile = ./minecraft-lock.json;
+
+  software = {
+    type = "neoforge";
+    minecraftVersion = "1.21.4";
+    neoforge.version = "21.4.121";
+  };
+};
+```

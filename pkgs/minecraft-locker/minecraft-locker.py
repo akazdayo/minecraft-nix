@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sys
+import xml.etree.ElementTree as ET
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,6 +20,8 @@ FABRIC_META = "https://meta.fabricmc.net/v2"
 MODRINTH_API = "https://api.modrinth.com/v2"
 CURSEFORGE_API = "https://api.curseforge.com/v1"
 CURSEFORGE_MINECRAFT_GAME_ID = 432
+NEOFORGE_MAVEN = "https://maven.neoforged.net/releases"
+NEOFORGE_METADATA_URL = f"{NEOFORGE_MAVEN}/net/neoforged/neoforge/maven-metadata.xml"
 
 
 class LockerError(Exception):
@@ -30,6 +33,18 @@ def request_json(url, headers=None):
     try:
       with urllib.request.urlopen(req) as response:
           return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+      body = error.read().decode("utf-8", errors="replace")
+      raise LockerError(f"GET {url} failed: HTTP {error.code}: {body}") from error
+    except urllib.error.URLError as error:
+      raise LockerError(f"GET {url} failed: {error.reason}") from error
+
+
+def request_text(url, headers=None):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
+    try:
+      with urllib.request.urlopen(req) as response:
+          return response.read().decode("utf-8")
     except urllib.error.HTTPError as error:
       body = error.read().decode("utf-8", errors="replace")
       raise LockerError(f"GET {url} failed: HTTP {error.code}: {body}") from error
@@ -82,6 +97,10 @@ def server_ref(software):
         loader = fabric.get("loaderVersion") or "latest"
         launcher = fabric.get("launcherVersion") or "latest"
         return f"server:fabric:{version}:{loader}:{launcher}"
+    if server_type == "neoforge":
+        neoforge = software.get("neoforge", {})
+        neoforge_version = neoforge.get("version") or "latest"
+        return f"server:neoforge:{version}:{neoforge_version}"
     if server_type == "vanilla":
         return f"server:vanilla:{version}"
     raise LockerError(f"unsupported server type: {server_type}")
@@ -158,6 +177,43 @@ def resolve_fabric_server(software):
     return artifact(f"server:fabric:{version}:{loader}:{launcher}", url, filename)
 
 
+def neoforge_version_prefix(minecraft_version):
+    parts = minecraft_version.split(".")
+    if len(parts) < 2 or parts[0] != "1" or not parts[1].isdigit():
+        raise LockerError(f"cannot infer NeoForge version prefix from Minecraft version: {minecraft_version}")
+    patch = parts[2] if len(parts) > 2 else "0"
+    if not patch.isdigit():
+        raise LockerError(f"cannot infer NeoForge version prefix from Minecraft version: {minecraft_version}")
+    return f"{int(parts[1])}.{int(patch)}."
+
+
+def latest_neoforge_version(minecraft_version):
+    metadata = request_text(NEOFORGE_METADATA_URL)
+    root = ET.fromstring(metadata)
+    prefix = neoforge_version_prefix(minecraft_version)
+    versions = [
+        element.text
+        for element in root.findall("./versioning/versions/version")
+        if element.text and element.text.startswith(prefix)
+    ]
+    if not versions:
+        raise LockerError(f"No NeoForge versions found for Minecraft {minecraft_version}")
+    stable = [version for version in versions if "-" not in version]
+    return (stable or versions)[-1]
+
+
+def resolve_neoforge_server(software):
+    version = required(software, "minecraftVersion", "software.minecraftVersion")
+    neoforge = software.setdefault("neoforge", {})
+    neoforge_version = neoforge.get("version") or latest_neoforge_version(version)
+    neoforge["version"] = neoforge_version
+    filename = f"neoforge-{neoforge_version}-installer.jar"
+    quoted_version = urllib.parse.quote(neoforge_version)
+    quoted_filename = urllib.parse.quote(filename)
+    url = f"{NEOFORGE_MAVEN}/net/neoforged/neoforge/{quoted_version}/{quoted_filename}"
+    return artifact(f"server:neoforge:{version}:{neoforge_version}", url, filename)
+
+
 def resolve_server(software):
     server_type = software.get("type", "vanilla")
     if server_type == "vanilla":
@@ -166,6 +222,8 @@ def resolve_server(software):
         return resolve_paper_server(software)
     if server_type == "fabric":
         return resolve_fabric_server(software)
+    if server_type == "neoforge":
+        return resolve_neoforge_server(software)
     raise LockerError(f"unsupported server type: {server_type}")
 
 
@@ -185,7 +243,7 @@ def resolve_modrinth(item, software):
     wanted_version = item.get("version")
     release_type = item.get("releaseType", "release")
     loader = item.get("loader")
-    if loader is None and software.get("type") in {"fabric", "paper"}:
+    if loader is None and software.get("type") in {"fabric", "paper", "neoforge"}:
         loader = software.get("type")
 
     if wanted_version:

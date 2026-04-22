@@ -92,6 +92,10 @@ let
       "server:fabric:${software.minecraftVersion}:${
         if software.fabric.loaderVersion == null then "latest" else software.fabric.loaderVersion
       }:${if software.fabric.launcherVersion == null then "latest" else software.fabric.launcherVersion}"
+    else if software.type == "neoforge" then
+      "server:neoforge:${software.minecraftVersion}:${
+        if software.neoforge.version == null then "latest" else software.neoforge.version
+      }"
     else
       "server:vanilla:${software.minecraftVersion}";
 
@@ -323,6 +327,7 @@ let
               "vanilla"
               "fabric"
               "paper"
+              "neoforge"
             ];
             default = "vanilla";
             description = "Minecraft server software type.";
@@ -336,7 +341,7 @@ let
           serverPackage = mkOption {
             type = types.nullOr types.package;
             default = null;
-            description = "Optional prebuilt server jar. When set, the server artifact is not read from the lock file.";
+            description = "Optional prebuilt server jar, or installer jar for installer-based software. When set, the server artifact is not read from the lock file.";
           };
 
           paper.build = mkOption {
@@ -358,6 +363,12 @@ let
             type = types.nullOr types.str;
             default = null;
             description = "Fabric installer/launcher version. Null means minecraft-locker resolves and locks the latest installer.";
+          };
+
+          neoforge.version = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "NeoForge version. Null means minecraft-locker resolves and locks the latest compatible version.";
           };
         };
 
@@ -530,11 +541,13 @@ let
     name: server:
     let
       lock = lockFromFile server.lockFile;
-      serverJar =
+      serverArtifact =
         if server.software.serverPackage != null then
           server.software.serverPackage
         else
           fetchArtifact (findArtifact name lock (serverRef server.software));
+      neoforgeArgsFile = "libraries/net/neoforged/neoforge/${server.software.neoforge.version}/unix_args.txt";
+      isNeoForge = server.software.type == "neoforge";
 
       baseProperties = {
         "server-port" = server.port;
@@ -598,7 +611,21 @@ let
         set -euo pipefail
 
         install -d -m 0755 ${escapeShellArg server.stateDir}
-        ln -sfn ${escapeShellArg (toString serverJar)} ${escapeShellArg server.stateDir}/server.jar
+        ${
+          if isNeoForge then
+            ''
+              marker=${escapeShellArg server.stateDir}/.minecraft-nix-neoforge-version
+              if [ ! -f ${escapeShellArg "${server.stateDir}/${neoforgeArgsFile}"} ] || [ "$(cat "$marker" 2>/dev/null || true)" != ${escapeShellArg server.software.neoforge.version} ]; then
+                ${server.javaPackage}/bin/java -jar ${escapeShellArg (toString serverArtifact)} --installServer
+                printf '%s\n' ${escapeShellArg server.software.neoforge.version} > "$marker"
+              fi
+              test -f ${escapeShellArg "${server.stateDir}/${neoforgeArgsFile}"}
+            ''
+          else
+            ''
+              ln -sfn ${escapeShellArg (toString serverArtifact)} ${escapeShellArg server.stateDir}/server.jar
+            ''
+        }
         cp ${serverPropertiesFile} ${escapeShellArg server.stateDir}/server.properties
         cp ${eulaFile} ${escapeShellArg server.stateDir}/eula.txt
         cp ${whitelistFile} ${escapeShellArg server.stateDir}/whitelist.json
@@ -637,6 +664,10 @@ let
             || (server.software.fabric.loaderVersion != null && server.software.fabric.launcherVersion != null);
           message = "services.minecraft-servers.${name}.software.fabric.loaderVersion and launcherVersion must be set after running minecraft-locker.";
         }
+        {
+          assertion = server.software.type != "neoforge" || server.software.neoforge.version != null;
+          message = "services.minecraft-servers.${name}.software.neoforge.version must be set after running minecraft-locker.";
+        }
       ];
 
       systemd.services."minecraft-server-${name}" = {
@@ -658,7 +689,11 @@ let
           Restart = "on-failure";
           RestartSec = "10s";
           ExecStartPre = preStart;
-          ExecStart = "${server.javaPackage}/bin/java ${lib.escapeShellArgs javaArgs} -jar server.jar ${lib.escapeShellArgs serverArgs}";
+          ExecStart =
+            if isNeoForge then
+              "${server.javaPackage}/bin/java ${lib.escapeShellArgs javaArgs} @${neoforgeArgsFile} ${lib.escapeShellArgs serverArgs}"
+            else
+              "${server.javaPackage}/bin/java ${lib.escapeShellArgs javaArgs} -jar server.jar ${lib.escapeShellArgs serverArgs}";
         };
       };
 

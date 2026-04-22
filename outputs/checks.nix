@@ -128,6 +128,34 @@ nixpkgs.lib.genAttrs systems (
         )
       ];
     };
+    neoforgeMachine = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        module
+        (
+          { pkgs, ... }:
+          {
+            boot.loader.grub.enable = false;
+            fileSystems."/" = {
+              device = "tmpfs";
+              fsType = "tmpfs";
+            };
+            system.stateVersion = "25.11";
+
+            services.minecraft-servers.neoforge = {
+              enable = true;
+              eula = true;
+              software = {
+                type = "neoforge";
+                minecraftVersion = "1.21.4";
+                serverPackage = pkgs.writeText "neoforge-installer.jar" "";
+                neoforge.version = "21.4.121";
+              };
+            };
+          }
+        )
+      ];
+    };
   in
   {
     module-smoke = pkgs.runCommand "minecraft-module-smoke" {
@@ -156,6 +184,15 @@ nixpkgs.lib.genAttrs systems (
       preStart = directUrlLockMachine.config.systemd.services.minecraft-server-direct-url-lock.serviceConfig.ExecStartPre;
     } ''
       grep -q 'minecraft-direct-url-lock-mods' "$preStart"
+      touch "$out"
+    '';
+
+    module-neoforge-start-command = pkgs.runCommand "minecraft-module-neoforge-start-command" {
+      execStart = neoforgeMachine.config.systemd.services.minecraft-server-neoforge.serviceConfig.ExecStart;
+      preStart = neoforgeMachine.config.systemd.services.minecraft-server-neoforge.serviceConfig.ExecStartPre;
+    } ''
+      grep -q '@libraries/net/neoforged/neoforge/21.4.121/unix_args.txt' <<< "$execStart"
+      grep -q -- '--installServer' "$preStart"
       touch "$out"
     '';
   }
