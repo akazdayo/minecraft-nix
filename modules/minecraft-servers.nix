@@ -156,8 +156,9 @@ let
         description = "Direct artifact URL.";
       };
       hash = mkOption {
-        type = types.str;
-        description = "Nix SRI hash for the URL.";
+        type = types.nullOr types.str;
+        default = null;
+        description = "Nix SRI hash for the URL. Null means the artifact is read from the lock file.";
       };
       filename = mkOption {
         type = types.nullOr types.str;
@@ -501,10 +502,16 @@ let
         ++ (map (entry: findArtifact instanceName lock (curseforgeRef entry)) content.curseforge);
       directArtifacts = map (
         entry:
-        {
+        let
           ref = "url:${entry.url}";
-          inherit (entry) url hash filename;
-        }
+        in
+        if entry.hash == null then
+          findArtifact instanceName lock ref
+        else
+          {
+            inherit ref;
+            inherit (entry) url hash filename;
+          }
       ) content.urls;
     in
     map (artifact: {
