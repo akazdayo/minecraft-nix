@@ -1,0 +1,7 @@
+interface:
+  display_name: "minecraft-nix"
+  short_description: "Configure reproducible NixOS Minecraft servers"
+  default_prompt: "Use $minecraft-nix to configure a reproducible NixOS Minecraft server."
+
+policy:
+  allow_implicit_invocation: true
