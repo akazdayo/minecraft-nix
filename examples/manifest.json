@@ -1,0 +1,32 @@
+{
+  "instances": {
+    "survival": {
+      "software": {
+        "type": "fabric",
+        "minecraftVersion": "1.21.4",
+        "fabric": {
+          "loaderVersion": null,
+          "launcherVersion": null
+        }
+      },
+      "mods": {
+        "modrinth": [
+          {
+            "project": "fabric-api",
+            "version": null,
+            "loader": null,
+            "releaseType": "release",
+            "optional": false
+          }
+        ],
+        "curseforge": [],
+        "urls": []
+      },
+      "plugins": {
+        "modrinth": [],
+        "curseforge": [],
+        "urls": []
+      }
+    }
+  }
+}
