@@ -193,6 +193,8 @@ nixpkgs.lib.genAttrs systems (
     } ''
       grep -q '@libraries/net/neoforged/neoforge/21.4.121/unix_args.txt' <<< "$execStart"
       grep -q -- '--installServer' "$preStart"
+      grep -q '.minecraft-nix-neoforge-install-id' "$preStart"
+      grep -q 'neoforge:1.21.4:21.4.121:/nix/store/' "$preStart"
       touch "$out"
     '';
   }

@@ -547,6 +547,7 @@ let
         else
           fetchArtifact (findArtifact name lock (serverRef server.software));
       neoforgeArgsFile = "libraries/net/neoforged/neoforge/${server.software.neoforge.version}/unix_args.txt";
+      neoforgeInstallId = "neoforge:${server.software.minecraftVersion}:${server.software.neoforge.version}:${toString serverArtifact}";
       isNeoForge = server.software.type == "neoforge";
 
       baseProperties = {
@@ -614,10 +615,10 @@ let
         ${
           if isNeoForge then
             ''
-              marker=${escapeShellArg server.stateDir}/.minecraft-nix-neoforge-version
-              if [ ! -f ${escapeShellArg "${server.stateDir}/${neoforgeArgsFile}"} ] || [ "$(cat "$marker" 2>/dev/null || true)" != ${escapeShellArg server.software.neoforge.version} ]; then
+              marker=${escapeShellArg server.stateDir}/.minecraft-nix-neoforge-install-id
+              if [ ! -f ${escapeShellArg "${server.stateDir}/${neoforgeArgsFile}"} ] || [ "$(cat "$marker" 2>/dev/null || true)" != ${escapeShellArg neoforgeInstallId} ]; then
                 ${server.javaPackage}/bin/java -jar ${escapeShellArg (toString serverArtifact)} --installServer
-                printf '%s\n' ${escapeShellArg server.software.neoforge.version} > "$marker"
+                printf '%s\n' ${escapeShellArg neoforgeInstallId} > "$marker"
               fi
               test -f ${escapeShellArg "${server.stateDir}/${neoforgeArgsFile}"}
             ''
