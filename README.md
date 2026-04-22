@@ -1,4 +1,4 @@
-# nix-mc
+# minecraft-nix
 
 NixOS module and lock tooling for reproducible Minecraft servers.
 
@@ -12,7 +12,7 @@ mods/plugins/datapacks.
 1. Add this flake to your NixOS configuration:
 
    ```nix
-   inputs.nix-mc.url = "path:/path/to/nix-mc";
+   inputs.minecraft-nix.url = "github:akazdayo/minecraft-nix";
    ```
 
 2. Create a manifest for the server and mods you want to lock:
@@ -42,14 +42,14 @@ mods/plugins/datapacks.
 3. Generate the lock file:
 
    ```sh
-   nix run /path/to/nix-mc#minecraft-locker -- update manifest.json -o minecraft-lock.json
+   nix run github:akazdayo/minecraft-nix#minecraft-locker -- update manifest.json -o minecraft-lock.json
    ```
 
 4. Use the module in your NixOS config:
 
    ```nix
    {
-     imports = [ nix-mc.nixosModules.default ];
+     imports = [ minecraft-nix.nixosModules.default ];
 
      services.minecraft-servers.survival = {
        enable = true;
@@ -100,15 +100,15 @@ Each Nix file has one job and returns one kind of value:
 
 ```nix
 {
-  inputs.nix-mc.url = "path:/path/to/nix-mc";
+  inputs.minecraft-nix.url = "github:akazdayo/minecraft-nix";
 
   outputs =
-    { nixpkgs, nix-mc, ... }:
+    { nixpkgs, minecraft-nix, ... }:
     {
       nixosConfigurations.host = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          nix-mc.nixosModules.default
+          minecraft-nix.nixosModules.default
           {
             services.minecraft-servers.survival = {
               enable = true;
